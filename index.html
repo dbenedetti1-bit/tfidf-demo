@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TF-IDF — Demo Interattiva</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f172a;color:#e2e8f0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── header ── */
+header{background:#0f172a;border-bottom:1px solid #1e293b;padding:8px 18px;display:flex;align-items:center;gap:14px;flex-shrink:0}
+header h1{font-size:15px;font-weight:700;color:#f1f5f9;letter-spacing:-.02em}
+header .sub{font-size:11px;color:#475569}
+
+/* ── step bar ── */
+.step-bar{background:#080e1c;border-bottom:1px solid #1e293b;padding:7px 18px;display:flex;align-items:center;gap:5px;flex-shrink:0;flex-wrap:wrap}
+.sbtn{padding:4px 13px;border-radius:14px;border:1px solid transparent;cursor:pointer;font-size:11px;font-weight:600;transition:all .18s;outline:none;letter-spacing:.01em}
+.sbtn.locked{background:#0f172a;color:#334155;cursor:not-allowed;border-color:#1e293b}
+.sbtn.ready{background:#1e293b;color:#94a3b8;border-color:#334155}
+.sbtn.ready:hover{background:#334155;color:#e2e8f0}
+.sbtn.active{background:#6366f1;color:#fff;border-color:#6366f1;box-shadow:0 0 14px rgba(99,102,241,.4)}
+.sbtn.done{background:#1e293b;color:#4ade80;border-color:#166534}
+.ssep{color:#1e293b;font-size:13px;line-height:1}
+.run-btn{background:#0d3320;color:#4ade80;border:1px solid #166534!important;border-radius:14px;padding:4px 14px;font-size:11px;font-weight:700;cursor:pointer;transition:all .18s}
+.run-btn:hover{background:#14532d}
+
+/* ── layout ── */
+.main{flex:1;display:flex;overflow:hidden}
+
+/* ── left panel ── */
+.left{width:45%;display:flex;flex-direction:column;background:#111827;border-right:1px solid #1e293b;min-width:280px}
+.doc-tabs{display:flex;background:#080e1c;border-bottom:1px solid #1e293b;flex-shrink:0;overflow-x:auto}
+.dtab{padding:6px 13px;font-size:11px;cursor:pointer;white-space:nowrap;color:#475569;border-bottom:2px solid transparent;transition:all .13s;user-select:none;flex-shrink:0}
+.dtab:hover:not(.active){color:#94a3b8;background:#111827}
+.dtab.active{color:#a5b4fc;border-bottom-color:#6366f1;background:#111827}
+.panel-lbl{padding:5px 14px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#334155;background:#080e1c;border-bottom:1px solid #1e293b;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc-view{flex:1;overflow-y:auto;padding:14px;font-size:13.5px;line-height:2;color:#94a3b8}
+.doc-view .w{cursor:pointer;border-radius:3px;padding:1px 3px;transition:background .1s}
+.doc-view .w:hover{background:#1e293b}
+.doc-view .sw{color:#334155;cursor:default}
+.doc-view .sw:hover{background:transparent}
+.doc-view .sel{background:#6366f1!important;color:#fff!important;border-radius:3px}
+.doc-view .hi{background:#fef08a;color:#1a1500;font-weight:600;border-radius:3px}
+
+/* ── right panel ── */
+.right{flex:1;display:flex;flex-direction:column;background:#0f172a;overflow:hidden;min-width:0}
+.right-hdr{padding:5px 14px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#334155;background:#080e1c;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.right-hdr span{color:#475569}
+.formula{font-family:monospace;font-size:10px;background:#1e293b;color:#a5b4fc;padding:2px 8px;border-radius:4px;border:1px solid #334155;white-space:nowrap}
+.right-scroll{flex:1;overflow-y:auto}
+
+/* ── step 0 preprocessing ── */
+.pp-sec{padding:11px 14px;border-bottom:1px solid #1e293b}
+.pp-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#475569;margin-bottom:7px;display:flex;align-items:center;gap:6px}
+.pp-title .badge-num{background:#1e293b;color:#64748b;border:1px solid #334155;border-radius:10px;padding:1px 7px;font-size:10px}
+.chip-wrap{display:flex;flex-wrap:wrap;gap:4px}
+.chip{padding:2px 8px;border-radius:9px;font-size:11px;font-family:monospace}
+.chip.kept{background:#14532d;color:#86efac}
+.chip.stop{background:#450a0a;color:#fca5a5;text-decoration:line-through;opacity:.7}
+.chip.punc{background:#1e293b;color:#475569}
+.stat-row{display:flex;gap:12px;font-size:11px;color:#475569;flex-wrap:wrap;margin-top:4px}
+.stat-row strong{color:#e2e8f0}
+
+/* ── dictionary (step 1) ── */
+.di{display:flex;align-items:center;padding:4px 14px;cursor:pointer;border-bottom:1px solid #1e293b;transition:background .08s;user-select:none;gap:6px}
+.di:hover:not(.sel){background:#1e293b}
+.di.sel{background:#6366f1}
+.di .di-n{width:32px;font-size:10px;color:#334155;flex-shrink:0}
+.di.sel .di-n{color:#a5b4fc}
+.di .di-w{font-family:monospace;font-size:13px;flex:1;color:#e2e8f0}
+.di .di-f{font-size:10px;color:#475569}
+.di.sel .di-f{color:#c7d2fe}
+
+/* ── vector table (steps 2–4) ── */
+.vtbl{width:100%;border-collapse:collapse}
+.vtbl thead th{position:sticky;top:0;padding:6px 11px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#475569;background:#080e1c;border-bottom:1px solid #1e293b;z-index:1;white-space:nowrap}
+.vtbl thead th.r{text-align:right}
+.vtbl tbody td{padding:3px 11px;border-bottom:1px solid #1e293b;font-size:12.5px}
+.vtbl tbody tr{cursor:pointer}
+.vtbl tbody tr:hover:not(.sel):not(.zero) td{background:#1e293b}
+.vtbl tbody tr.sel td{background:#6366f1;color:#fff}
+.vtbl tbody tr.zero td{color:#1e293b}
+.vtbl tbody tr.zero:hover td{background:#1e293b;color:#334155}
+.mono{font-family:monospace;font-size:11.5px}
+.tr{text-align:right}
+.bar-cell{padding-right:14px!important}
+.mbar{height:9px;border-radius:2px;min-width:1px}
+.top3-star{color:#fcd34d;font-size:10px;margin-left:3px}
+tr.top3 .mono{color:#fcd34d}
+tr.sel .top3-star{color:#fde68a}
+tr.sel .mono{color:#fff}
+
+/* ── IDF dots ── */
+.df-dots{display:flex;gap:3px;align-items:center}
+.dfdot{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+.dfdot.in{background:#6366f1}
+.dfdot.out{background:#1e293b;border:1px solid #334155}
+tr.sel .dfdot.in{background:#a5b4fc}
+tr.sel .dfdot.out{background:#4f46e5;border-color:#818cf8}
+
+/* ── top-3 banner (step 4) ── */
+.top3-banner{padding:9px 14px;font-size:11px;color:#64748b;background:#080e1c;border-bottom:1px solid #1e293b;flex-shrink:0}
+.top3-banner strong{color:#fcd34d}
+.top3-banner em{color:#e2e8f0;font-style:normal;font-weight:600}
+
+/* ── footer ── */
+.footer{padding:6px 16px;font-size:11px;color:#475569;background:#080e1c;border-top:1px solid #1e293b;display:flex;gap:12px;flex-wrap:wrap;align-items:center;flex-shrink:0}
+.badge{background:#1e293b;color:#64748b;padding:2px 8px;border-radius:4px;font-size:10px;border:1px solid #334155}
+.badge strong{color:#e2e8f0}
+kbd{background:#1e293b;border:1px solid #334155;border-bottom-width:2px;color:#64748b;padding:1px 5px;border-radius:3px;font-size:10px;font-family:monospace}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>TF-IDF Algorithm</h1>
+  <div class="sub">Demo interattiva passo-passo · 5 documenti · uso didattico</div>
+</header>
+
+<div class="step-bar" id="stepBar"></div>
+
+<div class="main">
+  <div class="left">
+    <div class="doc-tabs" id="docTabs"></div>
+    <div class="panel-lbl" id="leftLbl">DOCUMENTO</div>
+    <div class="doc-view" id="docView"></div>
+  </div>
+  <div class="right">
+    <div class="right-hdr">
+      <span id="rightTitle">PRONTO</span>
+      <span class="formula" id="formulaBadge" style="display:none"></span>
+    </div>
+    <div class="right-scroll" id="rightScroll"></div>
+  </div>
+</div>
+
+<div class="footer" id="footer"></div>
+
+<script>
+// ─── DOCUMENTI ───────────────────────────────────────────────────────────────
+const DOCS = {
+  'Physics': `Physics is the natural science that studies matter, energy, force, and motion. It examines the fundamental forces of nature, including gravity, electromagnetism, and nuclear forces. Quantum mechanics describes the behavior of particles at the atomic and subatomic scale, revealing that particles can exhibit wave-like properties. Einstein demonstrated that energy and mass are equivalent, a relationship captured in the famous equation relating energy to mass and the speed of light. Modern physics investigates dark matter and dark energy, mysterious components that together constitute most of the observable universe. Light travels through space exhibiting properties of both waves and particles, a duality that puzzled physicists for many decades.`,
+
+  'Biology': `Biology is the natural science that studies living organisms and their vital processes. The cell is the fundamental unit of life, and all living organisms are composed of one or more cells. DNA carries the genetic information that guides the development, functioning, and reproduction of every organism. Evolution by natural selection, first described by Charles Darwin, explains how species change and diversify over many generations. Proteins perform most functions within cells, including catalyzing chemical reactions and providing structural support. The study of genes and heredity constitutes the field of genetics. Ecosystems are complex networks of organisms interacting with each other and with their physical environment.`,
+
+  'Chemistry': `Chemistry is the science of matter and its transformations. Atoms are the fundamental building blocks of matter, combining through chemical bonds to form molecules and compounds. Elements are pure substances composed of a single type of atom, organized in the periodic table according to their atomic properties. Chemical reactions involve the rearrangement of atoms through the breaking and forming of chemical bonds. Electrons play a crucial role in chemical bonding and determine how atoms interact with each other. Organic chemistry studies the compounds of carbon, which form the molecular basis of all living matter. Acids, bases, and salts are central chemical compounds studied in solution chemistry and biochemistry.`,
+
+  'Computer Science': `Computer science is the study of computation, information, and automation. Algorithms are precise, step-by-step procedures for solving computational problems efficiently. Data structures organize and store data in computer memory to enable efficient access and modification. Software programs consist of instructions written in programming languages that direct computers to perform specific tasks. Networks connect computers and devices, enabling communication and the exchange of data across the world. Machine learning algorithms enable computers to identify patterns in data and make predictions without explicit programming. The design and analysis of efficient algorithms and data structures is a central discipline within computer science.`,
+
+  'Mathematics': `Mathematics is the abstract science of number, quantity, structure, and space. Numbers and their properties form the foundation of arithmetic, algebra, and number theory. Functions describe relationships between sets of numbers and are fundamental to calculus, analysis, and applied mathematics. Equations express mathematical equality and are used to solve problems involving unknown quantities. Theorems are mathematical statements that have been proven true through rigorous logical reasoning from basic axioms and definitions. Set theory provides the foundational language for modern mathematics, describing collections of abstract objects. Proof by induction and proof by contradiction are fundamental techniques used to establish mathematical results with certainty.`
+};
+
+// ─── STOPWORDS ───────────────────────────────────────────────────────────────
+const SW = new Set([
+  'a','about','above','after','all','also','an','and','any','are','as','at',
+  'be','been','being','both','but','by','can','could','do','does','each','every',
+  'first','for','from','had','has','have','how','i','in','including','into','is',
+  'it','its','itself','known','like','long','many','more','most','much','my',
+  'no','not','of','on','one','or','other','our','out','per','s','same','since',
+  'so','some','such','than','that','the','their','them','there','these','they',
+  'this','through','to','too','two','up','used','was','we','were','what','which',
+  'who','with','within','would','yet','your','how','why','where','when','whose',
+  'whom','whether','either','neither','among','along','against','toward','upon',
+  'around','beside','between','beyond','except','until','without','very','just',
+  'also','furthermore','however','therefore','thus','hence','moreover','although',
+  'because','if','then','while','before','after','during','across','over','under'
+]);
+
+// ─── ALGORITMO ───────────────────────────────────────────────────────────────
+function tokenize(text) {
+  return text.toLowerCase().match(/[a-z]+/g) || [];
+}
+
+function processDoc(text) {
+  const all = tokenize(text);
+  const kept = all.filter(t => t.length > 1);
+  return { all, kept };
+}
+
+function buildData() {
+  const names = Object.keys(DOCS);
+  const N = names.length;
+
+  const processed = {};
+  names.forEach(d => { processed[d] = processDoc(DOCS[d]); });
+
+  // Vocabolario: tutti i termini unici, ordinati
+  const termSet = new Set();
+  names.forEach(d => processed[d].kept.forEach(t => termSet.add(t)));
+  const dict = [...termSet].sort();
+
+  // Conteggi grezzi
+  const raw = {};
+  names.forEach(d => {
+    raw[d] = {};
+    dict.forEach(t => { raw[d][t] = 0; });
+    processed[d].kept.forEach(t => { raw[d][t]++; });
+  });
+
+  // TF = count(t,d) / |d|
+  const tf = {};
+  names.forEach(d => {
+    const len = processed[d].kept.length;
+    tf[d] = {};
+    dict.forEach(t => { tf[d][t] = len > 0 ? raw[d][t] / len : 0; });
+  });
+
+  // DF: quanti documenti contengono il termine
+  const df = {};
+  dict.forEach(t => { df[t] = names.filter(d => raw[d][t] > 0).length; });
+
+  // IDF = log(N / df(t))  — 0 per termini universali (non discriminanti)
+  const idf = {};
+  dict.forEach(t => { idf[t] = df[t] > 0 ? Math.log(N / df[t]) : 0; });
+
+  // TF-IDF
+  const tfidf = {};
+  names.forEach(d => {
+    tfidf[d] = {};
+    dict.forEach(t => { tfidf[d][t] = tf[d][t] * idf[t]; });
+  });
+
+  // Documenti che contengono ogni termine
+  const docsOf = {};
+  dict.forEach(t => { docsOf[t] = names.filter(d => raw[d][t] > 0); });
+
+  return { names, N, dict, processed, raw, tf, df, idf, tfidf, docsOf };
+}
+
+const DATA = buildData();
+
+// ─── STATO ───────────────────────────────────────────────────────────────────
+const S = {
+  step: 0,      // 0=preproc 1=dict 2=tf 3=idf 4=tfidf
+  maxStep: 0,   // step massimo sbloccato
+  doc: DATA.names[0],
+  word: null    // termine selezionato nel dizionario
+};
+
+const STEP_LABEL = [
+  '0 · Preprocessing',
+  '1 · Dizionario',
+  '2 · Term Frequency',
+  '3 · Document Frequency & IDF',
+  '4 · TF-IDF Finale'
+];
+const STEP_RUN = ['Preprocessing','Dizionario','Term Frequency','DF & IDF','TF-IDF Finale'];
+
+// ─── UTILITÀ ─────────────────────────────────────────────────────────────────
+const f3 = n => n.toFixed(3);
+const f4 = n => n.toFixed(4);
+function maxOf(obj) { const v = Object.values(obj); return v.length ? Math.max(...v) : 1; }
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+// ─── STEP BAR ─────────────────────────────────────────────────────────────────
+function renderStepBar() {
+  const bar = document.getElementById('stepBar');
+  bar.innerHTML = '';
+  STEP_LABEL.forEach((lbl, i) => {
+    if (i > 0) { const sep = document.createElement('span'); sep.className='ssep'; sep.textContent='›'; bar.appendChild(sep); }
+    const btn = document.createElement('button');
+    btn.className = 'sbtn';
+    btn.textContent = lbl;
+    if (i === S.step) btn.classList.add('active');
+    else if (i < S.step) btn.classList.add('done');
+    else if (i <= S.maxStep) btn.classList.add('ready');
+    else btn.classList.add('locked');
+    if (i <= S.maxStep) btn.addEventListener('click', () => { S.step = i; render(); });
+    bar.appendChild(btn);
+  });
+  if (S.step === S.maxStep && S.step < 4) {
+    bar.appendChild(Object.assign(document.createElement('span'),{className:'ssep',textContent:'  '}));
+    const run = document.createElement('button');
+    run.className = 'run-btn';
+    run.textContent = '▶ Avvia ' + STEP_RUN[S.step + 1];
+    run.addEventListener('click', () => { S.maxStep = S.step + 1; S.step = S.maxStep; S.word = null; render(); });
+    bar.appendChild(run);
+  }
+}
+
+// ─── TABS ────────────────────────────────────────────────────────────────────
+function renderTabs() {
+  const el = document.getElementById('docTabs');
+  el.innerHTML = DATA.names.map(d =>
+    `<div class="dtab${d===S.doc?' active':''}" data-d="${d}">${d}</div>`
+  ).join('');
+  el.querySelectorAll('.dtab').forEach(t =>
+    t.addEventListener('click', () => { S.doc = t.dataset.d; render(); })
+  );
+}
+
+// ─── PANNELLO SINISTRO ───────────────────────────────────────────────────────
+function renderLeft() {
+  const text = DOCS[S.doc];
+  const sel = S.word;
+  const re = /([a-zA-Z]+)|([^a-zA-Z]+)/g;
+  let m, html = '';
+
+  while ((m = re.exec(text)) !== null) {
+    if (m[2]) {
+      html += m[2].replace(/\n/g,'<br>');
+    } else {
+      const lo = m[1].toLowerCase();
+      let cls = 'w';
+      if (lo.length <= 1) cls += ' sw';
+      else if (sel && lo === sel) cls += ' sel';
+      html += `<span class="${cls}" data-lo="${lo}">${m[1]}</span>`;
+    }
+  }
+
+  const view = document.getElementById('docView');
+  view.innerHTML = html;
+
+  // click su parola nel testo → seleziona nel dizionario (se è nel vocabolario)
+  view.querySelectorAll('.w').forEach(sp => {
+    sp.addEventListener('click', () => {
+      const lo = sp.dataset.lo;
+      if (DATA.dict.includes(lo)) { S.word = lo; render(); }
+    });
+  });
+
+  // etichetta pannello sinistro
+  const lbl = document.getElementById('leftLbl');
+  if (sel) {
+    const cnt = DATA.raw[S.doc][sel] || 0;
+    lbl.textContent = `"${sel}" → ${cnt} occorrenza${cnt!==1?'e':''} in questo documento`;
+  } else if (S.step === 0) {
+    const { all, kept } = DATA.processed[S.doc];
+    lbl.textContent = `TESTO ORIGINALE · ${all.length} token · ${kept.length} nel vocabolario`;
+  } else {
+    lbl.textContent = 'DOCUMENTO · clicca una parola nel dizionario (o nel testo)';
+  }
+}
+
+// ─── STEP 0: PREPROCESSING ───────────────────────────────────────────────────
+function renderStep0() {
+  const { all, kept } = DATA.processed[S.doc];
+  const singleChar = all.filter(t => t.length <= 1).length;
+  const uniq = [...new Set(kept)].sort();
+
+  const tokenChips = all.map(t =>
+    `<span class="chip ${t.length<=1?'punc':'kept'}">${t}</span>`
+  ).join('');
+
+  const termChips = uniq.map(t => `<span class="chip kept">${t}</span>`).join('');
+
+  document.getElementById('rightScroll').innerHTML = `
+    <div class="pp-sec">
+      <div class="pp-title"><span class="badge-num">1</span>Tokenizzazione — testo → token minuscoli</div>
+      <div class="chip-wrap">${tokenChips}</div>
+    </div>
+    <div class="pp-sec">
+      <div class="pp-title"><span class="badge-num">2</span>Filtro lunghezza — esclusi i token di 1 carattere (${singleChar} rimossi)</div>
+      <div class="stat-row">
+        <span>Token totali: <strong>${all.length}</strong></span>
+        <span>Esclusi (1 char): <strong>${singleChar}</strong></span>
+        <span>Nel vocabolario: <strong>${kept.length}</strong></span>
+        <span>Termini unici: <strong>${uniq.length}</strong></span>
+      </div>
+    </div>
+    <div class="pp-sec">
+      <div class="pp-title"><span class="badge-num">3</span>Vocabolario del documento — tutti i termini, incluse le parole comuni</div>
+      <div class="chip-wrap">${termChips}</div>
+    </div>`;
+
+  document.getElementById('rightTitle').textContent = `PREPROCESSING · ${S.doc}`;
+  document.getElementById('formulaBadge').style.display = 'none';
+  document.getElementById('footer').innerHTML = `
+    <span class="badge">Corpus: <strong>${DATA.N} documenti</strong></span>
+    <span class="badge">Vocabolario globale: <strong>${DATA.dict.length} termini</strong></span>
+    <span>Parole comuni ("the", "is"…) entrano nel vocabolario: l'IDF le penalizzerà automaticamente</span>`;
+}
+
+// ─── STEP 1: DIZIONARIO ──────────────────────────────────────────────────────
+function renderStep1() {
+  const sel = S.word;
+  document.getElementById('rightScroll').innerHTML = DATA.dict.map((w, i) => {
+    const df = DATA.df[w];
+    return `<div class="di${w===sel?' sel':''}" data-w="${w}" data-i="${i}">
+      <span class="di-n">${i+1}</span>
+      <span class="di-w">${w}</span>
+      <span class="di-f">in ${df} doc${df!==1?'s':''}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('rightScroll').querySelectorAll('.di').forEach(el =>
+    el.addEventListener('click', () => { S.word = el.dataset.w; render(); })
+  );
+
+  if (sel) {
+    const selEl = document.getElementById('rightScroll').querySelector('.sel');
+    if (selEl) selEl.scrollIntoView({block:'nearest'});
+  }
+
+  document.getElementById('rightTitle').textContent = `DIZIONARIO · ${DATA.dict.length} termini`;
+  const fb = document.getElementById('formulaBadge');
+  fb.style.display=''; fb.textContent='ordinato alfabeticamente';
+  document.getElementById('footer').innerHTML = `
+    <span class="badge">Vocabolario: <strong>${DATA.dict.length} termini</strong></span>
+    <span>Usa <kbd>↑</kbd> <kbd>↓</kbd> per navigare · clicca per selezionare</span>
+    ${sel ? `<span class="badge">Selezionato: <strong>"${sel}"</strong> · presente in ${DATA.df[sel]} doc/s</span>` : '<span>Seleziona un termine per evidenziarlo nel documento</span>'}`;
+}
+
+// ─── STEP 2: TERM FREQUENCY ───────────────────────────────────────────────────
+function renderStep2() {
+  const doc = S.doc, sel = S.word;
+  const raw = DATA.raw[doc], tfs = DATA.tf[doc];
+  const maxTF = maxOf(tfs) || 1;
+  const totalTerms = DATA.processed[doc].kept.length;
+
+  let rows = DATA.dict.map(w => {
+    const cnt = raw[w], tf = tfs[w];
+    const isSel = w === sel, isZero = cnt === 0;
+    const bw = Math.round((tf / maxTF) * 72);
+    const barColor = isSel ? '#a5b4fc' : '#6366f1';
+    return `<tr class="${isSel?'sel':isZero?'zero':''}" data-w="${w}">
+      <td class="mono">${w}</td>
+      <td class="mono tr">${cnt||'—'}</td>
+      <td class="mono tr">${isZero?'0.0000':f4(tf)}</td>
+      <td class="bar-cell"><div class="mbar" style="width:${bw}px;background:${barColor}"></div></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('rightScroll').innerHTML = `<table class="vtbl">
+    <thead><tr><th>Termine</th><th class="r">Conteggio</th><th class="r">TF</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+
+  document.getElementById('rightScroll').querySelectorAll('tr[data-w]').forEach(el =>
+    el.addEventListener('click', () => { S.word = el.dataset.w; render(); })
+  );
+  if (sel) { const s=document.getElementById('rightScroll').querySelector('tr.sel'); if(s) s.scrollIntoView({block:'nearest'}); }
+
+  document.getElementById('rightTitle').textContent = `TERM FREQUENCY · ${doc}`;
+  const fb = document.getElementById('formulaBadge');
+  fb.style.display=''; fb.textContent='TF(t,d) = count(t,d) / |d|';
+
+  const nonZero = DATA.dict.filter(w=>raw[w]>0).length;
+  const selInfo = sel && raw[sel]>0
+    ? `<span class="badge">TF("${sel}") = ${raw[sel]} ÷ ${totalTerms} = ${f4(tfs[sel])}</span>` : '';
+  document.getElementById('footer').innerHTML = `
+    <span class="badge">Lunghezza doc: <strong>${totalTerms} termini</strong></span>
+    <span class="badge">Termini presenti: <strong>${nonZero} / ${DATA.dict.length}</strong></span>
+    <span>TF = occorrenze grezze ÷ lunghezza documento</span>${selInfo}`;
+}
+
+// ─── STEP 3: DOCUMENT FREQUENCY & IDF ────────────────────────────────────────
+function renderStep3() {
+  const sel = S.word;
+  const maxIDF = maxOf(DATA.idf) || 1;
+
+  const dotLegend = DATA.names.map((n,i) =>
+    `<span title="${n}" style="display:inline-flex;align-items:center;gap:3px">
+      <span class="dfdot in" style="background:#6366f1;opacity:${.5+i*.1}"></span>${n.split(' ')[0]}
+    </span>`
+  ).join(' ');
+
+  let rows = DATA.dict.map(w => {
+    const df = DATA.df[w], idfV = DATA.idf[w];
+    const isSel = w===sel, isZero = idfV===0;
+    const bw = Math.round((idfV / maxIDF) * 70);
+    const barC = isSel ? '#fde68a' : '#f59e0b';
+    const wordC = isZero ? '#334155' : 'inherit';
+
+    const dots = DATA.names.map(d => {
+      const present = DATA.raw[d][w] > 0;
+      return `<span class="dfdot ${present?'in':'out'}" title="${d}"></span>`;
+    }).join('');
+
+    return `<tr class="${isSel?'sel':''}" data-w="${w}" style="cursor:pointer">
+      <td class="mono" style="color:${isSel?'#fff':wordC}">${w}</td>
+      <td><div class="df-dots">${dots}</div></td>
+      <td class="mono tr">${df}</td>
+      <td class="mono tr">${isZero?'0.000':f3(idfV)}</td>
+      <td class="bar-cell"><div class="mbar" style="width:${bw}px;background:${barC}"></div></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('rightScroll').innerHTML = `<table class="vtbl">
+    <thead><tr>
+      <th style="min-width:110px">Termine</th>
+      <th>Presente in…</th>
+      <th class="r">DF</th>
+      <th class="r">IDF</th>
+      <th></th>
+    </tr></thead>
+    <tbody>${rows}</tbody></table>`;
+
+  document.getElementById('rightScroll').querySelectorAll('tr[data-w]').forEach(el =>
+    el.addEventListener('click', () => { S.word = el.dataset.w; render(); })
+  );
+  if (sel) { const s=document.getElementById('rightScroll').querySelector('tr.sel'); if(s) s.scrollIntoView({block:'nearest'}); }
+
+  document.getElementById('rightTitle').textContent = `DOCUMENT FREQUENCY & IDF · ${DATA.N} documenti`;
+  const fb = document.getElementById('formulaBadge');
+  fb.style.display=''; fb.textContent=`IDF(t) = log(N / df(t))`;
+
+  const selInfo = sel
+    ? `<span class="badge">IDF("${sel}") = log(${DATA.N}/${DATA.df[sel]}) = ${f3(DATA.idf[sel])}</span>` : '';
+  document.getElementById('footer').innerHTML = `
+    <span class="badge">N = <strong>${DATA.N} doc</strong></span>
+    <span>● = doc contiene il termine · ○ = assente · barra ambra = peso IDF (raro=alto)</span>
+    <span class="badge">IDF=0 → termine universale, non discriminante</span>
+    ${selInfo}`;
+}
+
+// ─── STEP 4: TF-IDF FINALE ───────────────────────────────────────────────────
+function renderStep4() {
+  const doc = S.doc, sel = S.word;
+  const vec = DATA.tfidf[doc];
+  const nonZero = DATA.dict.filter(w => vec[w] > 0);
+  const sorted = [...nonZero].sort((a,b) => vec[b]-vec[a]);
+  const top3 = new Set(sorted.slice(0,3));
+  const maxV = sorted.length > 0 ? vec[sorted[0]] : 1;
+
+  const banner = sorted.length >= 3
+    ? `Termini più discriminanti per <em>${doc}</em>: ${sorted.slice(0,3).map(w=>`<strong>${w}</strong> (${f3(vec[w])})`).join(', ')}`
+    : `Nessun termine discriminante per ${doc}`;
+
+  let rows = DATA.dict.map(w => {
+    const v = vec[w];
+    const isSel = w===sel, isTop = top3.has(w), isZero = v===0;
+    const bw = Math.round((v / maxV) * 110);
+    const barC = isSel ? '#a5b4fc' : isTop ? '#fbbf24' : '#4f46e5';
+    return `<tr class="${isSel?'sel':isZero?'zero':isTop?'top3':''}" data-w="${w}">
+      <td class="mono">${w}${isTop&&!isZero?'<span class="top3-star">★</span>':''}</td>
+      <td class="mono tr">${isZero?'—':f4(v)}</td>
+      <td class="bar-cell"><div class="mbar" style="width:${bw}px;background:${barC}"></div></td>
+    </tr>`;
+  }).join('');
+
+  const scroll = document.getElementById('rightScroll');
+  scroll.innerHTML = `<div class="top3-banner">${banner}</div>
+    <table class="vtbl">
+      <thead><tr><th>Termine</th><th class="r">TF-IDF</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table>`;
+
+  scroll.querySelectorAll('tr[data-w]').forEach(el =>
+    el.addEventListener('click', () => { S.word = el.dataset.w; render(); })
+  );
+  if (sel) { const s=scroll.querySelector('tr.sel'); if(s) s.scrollIntoView({block:'nearest'}); }
+
+  document.getElementById('rightTitle').textContent = `TF-IDF VECTORS · ${doc}`;
+  const fb = document.getElementById('formulaBadge');
+  fb.style.display=''; fb.textContent='TF-IDF(t,d) = TF(t,d) × IDF(t)';
+
+  const selInfo = sel && vec[sel]>0
+    ? `<span class="badge">TF-IDF("${sel}") = ${f4(DATA.tf[doc][sel])} × ${f3(DATA.idf[sel])} = ${f4(vec[sel])}</span>` : '';
+  document.getElementById('footer').innerHTML = `
+    <span class="badge">Termini non-zero: <strong>${nonZero.length} / ${DATA.dict.length}</strong></span>
+    <span>★ = top 3 termini più caratterizzanti per questo documento</span>
+    ${selInfo}`;
+}
+
+// ─── RENDER PRINCIPALE ───────────────────────────────────────────────────────
+function render() {
+  renderStepBar();
+  renderTabs();
+  renderLeft();
+  ({ 0:renderStep0, 1:renderStep1, 2:renderStep2, 3:renderStep3, 4:renderStep4 }[S.step])();
+}
+
+// ─── TASTIERA ────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+  e.preventDefault();
+  const dict = DATA.dict;
+  let idx = S.word ? dict.indexOf(S.word) : -1;
+  if (idx < 0) idx = e.key === 'ArrowDown' ? -1 : 0;
+  idx = e.key === 'ArrowDown' ? Math.min(dict.length-1, idx+1) : Math.max(0, idx-1);
+  S.word = dict[idx];
+  render();
+});
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
